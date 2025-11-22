@@ -6,30 +6,160 @@
 
 from rational import *
 
+
 class Polynomial:
     """Класс для представления многочлена"""
-    
+
     def __init__(self, coefficients):
         """
         Инициализация многочлена
         coefficients - список коэффициентов (Rational или числа) от младших к старшим степеням
+        ИЛИ строка в формате "2x^2 + 3x + 1"
         """
-        if not coefficients:
-            self.coefficients = [Rational(Integer(0), Natural([1]))]
+        if isinstance(coefficients, str):
+            self.coefficients = self._parse_polynomial(coefficients)
         else:
-            self.coefficients = []
-            for coef in coefficients:
-                if isinstance(coef, Rational):
-                    self.coefficients.append(coef.copy())
-                elif isinstance(coef, (int, str)):
-                    self.coefficients.append(Rational(coef))
-                elif isinstance(coef, Integer):
-                    self.coefficients.append(TRANS_Z_Q(coef))
-                else:
-                    raise ValueError("Некорректный тип коэффициента")
-        
+            if not coefficients:
+                self.coefficients = [Rational(Integer(0), Natural([1]))]
+            else:
+                self.coefficients = []
+                for coef in coefficients:
+                    if isinstance(coef, Rational):
+                        self.coefficients.append(coef.copy())
+                    elif isinstance(coef, (int, str)):
+                        self.coefficients.append(Rational(coef))
+                    elif isinstance(coef, Integer):
+                        self.coefficients.append(TRANS_Z_Q(coef))
+                    else:
+                        raise ValueError("Некорректный тип коэффициента")
+
         self._normalize()
-    
+
+    def _parse_polynomial(self, poly_str):
+        """Парсинг строкового представления многочлена"""
+        # Упрощаем строку: удаляем пробелы
+        poly_str = poly_str.replace(' ', '')
+
+        if poly_str == '0':
+            return [Rational(0)]
+
+        # Если строка не содержит 'x', это константа
+        if 'x' not in poly_str:
+            try:
+                return [Rational(poly_str)]
+            except:
+                raise ValueError(f"Некорректный формат константы: {poly_str}")
+
+        # Находим максимальную степень
+        max_degree = self._find_max_degree(poly_str)
+
+        # Инициализируем коэффициенты нулями
+        coefficients = [Rational(0) for _ in range(max_degree + 1)]
+
+        # Разбиваем на мономы по знакам + и -
+        terms = []
+        current_term = ""
+
+        for i, char in enumerate(poly_str):
+            if char in '+-' and i > 0:
+                terms.append(current_term)
+                current_term = char
+            else:
+                current_term += char
+
+        if current_term:
+            terms.append(current_term)
+
+        # Обрабатываем каждый моном
+        for term in terms:
+            if not term:
+                continue
+
+            coef, degree = self._parse_term(term)
+            coefficients[degree] = ADD_QQ_Q(coefficients[degree], coef)
+
+        return coefficients
+
+    def _find_max_degree(self, poly_str):
+        """Находит максимальную степень в многочлене"""
+        max_degree = 0
+
+        # Ищем все вхождения x с показателями степени
+        i = 0
+        while i < len(poly_str):
+            if poly_str[i] == 'x':
+                # Определяем степень
+                if i + 1 < len(poly_str) and poly_str[i + 1] == '^':
+                    # Формат x^n
+                    j = i + 2
+                    while j < len(poly_str) and poly_str[j].isdigit():
+                        j += 1
+                    degree = int(poly_str[i + 2:j])
+                    max_degree = max(max_degree, degree)
+                    i = j
+                else:
+                    # Просто x (степень 1)
+                    max_degree = max(max_degree, 1)
+                    i += 1
+            else:
+                i += 1
+
+        return max_degree
+
+    def _parse_term(self, term):
+        """Парсит отдельный моном"""
+        # Определяем знак
+        sign = 1
+        if term[0] == '+':
+            term = term[1:]
+        elif term[0] == '-':
+            sign = -1
+            term = term[1:]
+
+        if not term:
+            return Rational(0), 0
+
+        # Если терм не содержит x, это константа
+        if 'x' not in term:
+            try:
+                coef = Rational(term)
+                return MUL_QQ_Q(coef, Rational(sign)), 0
+            except:
+                raise ValueError(f"Некорректный коэффициент: {term}")
+
+        # Разделяем коэффициент и x часть
+        x_index = term.find('x')
+        coef_part = term[:x_index]
+        x_part = term[x_index:]
+
+        # Обрабатываем коэффициент
+        if not coef_part:
+            coef = Rational(1)
+        elif coef_part == '-':
+            coef = Rational(-1)
+        elif coef_part == '+':
+            coef = Rational(1)
+        else:
+            try:
+                coef = Rational(coef_part)
+            except:
+                raise ValueError(f"Некорректный коэффициент: {coef_part}")
+
+        coef = MUL_QQ_Q(coef, Rational(sign))
+
+        # Обрабатываем степень
+        if x_part == 'x':
+            degree = 1
+        elif x_part.startswith('x^'):
+            try:
+                degree = int(x_part[2:])
+            except:
+                raise ValueError(f"Некорректная степень: {x_part}")
+        else:
+            raise ValueError(f"Некорректный формат монома: {term}")
+
+        return coef, degree
+
     def _normalize(self):
         """Удаление ведущих нулевых коэффициентов"""
         while len(self.coefficients) > 1:
@@ -38,21 +168,21 @@ class Polynomial:
                 self.coefficients.pop()
             else:
                 break
-    
+
     def __str__(self):
         """Строковое представление многочлена"""
         if not self.coefficients:
             return "0"
-        
+
         terms = []
         for i in range(len(self.coefficients) - 1, -1, -1):
             coef = self.coefficients[i]
-            
+
             if POZ_Z_D(coef.numerator) == 0:
                 continue
-            
+
             coef_str = str(coef)
-            
+
             if i == 0:
                 terms.append(coef_str)
             elif i == 1:
@@ -69,22 +199,22 @@ class Polynomial:
                     terms.append(f"-x^{i}")
                 else:
                     terms.append(f"{coef_str}x^{i}")
-        
+
         if not terms:
             return "0"
-        
+
         result = terms[0]
         for term in terms[1:]:
             if term.startswith("-"):
                 result += " - " + term[1:]
             else:
                 result += " + " + term
-        
+
         return result
-    
+
     def __repr__(self):
         return f"Polynomial({str(self)})"
-    
+
     def copy(self):
         """Создание копии многочлена"""
         return Polynomial([c.copy() for c in self.coefficients])
