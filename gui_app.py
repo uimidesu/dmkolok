@@ -297,7 +297,7 @@ class ModernAlgebraApp(ctk.CTk):
             ],
             calculator=self.calculate_polynomial,
             num_type="polynomial",
-            input_hint="Коэффициенты через запятую от младшей степени: 1,2,3 = 3x² + 2x + 1"
+            input_hint="Формат: '2x^3 + x - 5' или коэффициенты через запятую: '1,0,2'"
         )
 
     def create_calculation_interface(self, title, subtitle, default_val1, default_val2,
@@ -546,11 +546,18 @@ class ModernAlgebraApp(ctk.CTk):
         """Вычисление для многочленов"""
         try:
             def parse_poly(s):
-                coeffs = [c.strip() for c in s.split(',')]
-                return Polynomial([Rational(c) for c in coeffs])
+                # Пробуем распарсить как строковое представление
+                # Если не получается, пробуем как список коэффициентов
+                try:
+                    return Polynomial(s)
+                except:
+                    # Старый формат: коэффициенты через запятую
+                    coeffs = [c.strip() for c in s.split(',')]
+                    return Polynomial([Rational(c) for c in coeffs])
 
             a = parse_poly(self.entry1.get())
             b = parse_poly(self.entry2.get())
+
             def parse_c(b):
                 c = b.coefficients[0].numerator
                 if POZ_Z_D(c) == 2:
@@ -560,18 +567,17 @@ class ModernAlgebraApp(ctk.CTk):
                 elif POZ_Z_D(c) == 0:
                     c = 0
                 return c
+
             c = parse_c(b)
             op = self.selected_operation.get()
 
             operations = {
                 "ADD_PP_P": lambda: f"P₁ = {a}\nP₂ = {b}\n\nP₁ + P₂ = {ADD_PP_P(a, b)}",
                 "SUB_PP_P": lambda: f"P₁ = {a}\nP₂ = {b}\n\nP₁ - P₂ = {SUB_PP_P(a, b)}",
-
                 "MUL_PQ_P": lambda: f"P₁ = {a}\nq = {b.coefficients[0]}\n\nP₁ × q = {MUL_PQ_P(a, b.coefficients[0])}",
                 "MUL_Pxk_P": lambda: f"P₁ = {a}\nk = {c}\n\nP₁ × x^k = {MUL_Pxk_P(a, c)}",
                 "FAC_P_Q": lambda: f"P₁ = {a}\n\nAnswer = {FAC_P_Q(a)}",
                 "NMR_P_P": lambda: f"P₁ = {a}\n\nAnswer = {NMR_P_P(a)}",
-
                 "MUL_PP_P": lambda: f"P₁ = {a}\nP₂ = {b}\n\nP₁ × P₂ = {MUL_PP_P(a, b)}",
                 "DIV_PP_P": lambda: f"P₁ = {a}\nP₂ = {b}\n\nP₁ ÷ P₂ = {DIV_PP_P(a, b)}",
                 "MOD_PP_P": lambda: f"P₁ = {a}\nP₂ = {b}\n\nP₁ mod P₂ = {MOD_PP_P(a, b)}",
